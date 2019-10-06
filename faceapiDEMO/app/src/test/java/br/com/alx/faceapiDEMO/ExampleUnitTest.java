@@ -1,4 +1,4 @@
-package br.com.alx.reconhecimentofacial;
+package br.com.alx.faceapiDEMO;
 
 import org.junit.Test;
 

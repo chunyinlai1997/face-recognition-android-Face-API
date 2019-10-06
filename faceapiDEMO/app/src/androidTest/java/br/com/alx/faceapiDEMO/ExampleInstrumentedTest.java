@@ -1,4 +1,4 @@
-package br.com.alx.reconhecimentofacial;
+package br.com.alx.faceapiDEMO;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;

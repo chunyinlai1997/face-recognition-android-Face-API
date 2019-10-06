@@ -3,6 +3,8 @@ package br.com.alx.faceapiDEMO;
 import android.os.Bundle;
 
 import java.io.*;
+import java.text.DecimalFormat;
+import java.util.UUID;
 
 import android.app.*;
 import android.content.*;
@@ -12,6 +14,8 @@ import android.view.*;
 import android.graphics.*;
 import android.widget.*;
 import android.provider.*;
+import android.util.Log;
+import android.content.res.AssetManager;
 
 import com.microsoft.projectoxford.face.*;
 import com.microsoft.projectoxford.face.contract.*;
@@ -55,25 +59,28 @@ public class MainActivity extends Activity {
             try {
                 Bitmap bitmap = MediaStore.Images.Media.getBitmap(
                         getContentResolver(), uri);
+                AssetManager assetManager = getAssets();
+                InputStream is = assetManager.open("test.jpg");
+                Bitmap bitmap2 = BitmapFactory.decodeStream(is);
                 ImageView imageView = findViewById(R.id.imageView1);
                 imageView.setImageBitmap(bitmap);
 
                 // Comment out for tutorial
-                detectAndFrame(bitmap);
+                UUID Id0 = detectAndFrame(bitmap);
+                UUID Id1 = detect(bitmap2);
+                verify(Id0,Id1);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-    // Detect faces by uploading a face image.
-    // Frame faces after detection.
-    private void detectAndFrame(final Bitmap imageBitmap) {
+    private UUID detect(final Bitmap imageBitmap) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         imageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
         ByteArrayInputStream inputStream =
                 new ByteArrayInputStream(outputStream.toByteArray());
-
+        final UUID[] mFaceId0 = new UUID[1];
         AsyncTask<InputStream, String, Face[]> detectTask =
                 new AsyncTask<InputStream, String, Face[]>() {
                     String exceptionMessage = "";
@@ -118,6 +125,90 @@ public class MainActivity extends Activity {
                         //TODO: update progress
                         detectionProgressDialog.setMessage(progress[0]);
                     }
+
+                    private static final String LOG_TAG = "LogActivity";
+
+                    @Override
+                    protected void onPostExecute(Face[] result) {
+                        //TODO: update face frames
+                        detectionProgressDialog.dismiss();
+
+                        if(!exceptionMessage.equals("")){
+                            showError(exceptionMessage);
+                        }
+                        if (result == null) return;
+
+                        for (Face face : result) {
+                            UUID mFaceId = face.faceId;
+                            mFaceId0[0] = mFaceId;
+                            Log.d(LOG_TAG, mFaceId.toString());
+                        }
+
+                        //TextView textView = findViewById(R.id.verifyText);
+                        //textView.setText(result[1].toString());
+                    }
+                };
+
+        detectTask.execute(inputStream);
+
+        return mFaceId0[0];
+    }
+
+    // Detect faces by uploading a face image.
+    // Frame faces after detection.
+    private UUID detectAndFrame(final Bitmap imageBitmap) {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        imageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+        ByteArrayInputStream inputStream =
+                new ByteArrayInputStream(outputStream.toByteArray());
+        final UUID[] mFaceId0 = new UUID[1];
+        AsyncTask<InputStream, String, Face[]> detectTask =
+                new AsyncTask<InputStream, String, Face[]>() {
+                    String exceptionMessage = "";
+
+                    @Override
+                    protected Face[] doInBackground(InputStream... params) {
+                        try {
+                            publishProgress("Detecting...");
+                            Face[] result = faceServiceClient.detect(
+                                    params[0],
+                                    true,         // returnFaceId
+                                    false,        // returnFaceLandmarks
+                                    null          // returnFaceAttributes:
+                                    /* new FaceServiceClient.FaceAttributeType[] {
+                                        FaceServiceClient.FaceAttributeType.Age,
+                                        FaceServiceClient.FaceAttributeType.Gender }
+                                    */
+                            );
+                            if (result == null){
+                                publishProgress(
+                                        "Detection Finished. Nothing detected");
+                                return null;
+                            }
+                            publishProgress(String.format(
+                                    "Detection Finished. %d face(s) detected",
+                                    result.length));
+                            return result;
+                        } catch (Exception e) {
+                            exceptionMessage = String.format(
+                                    "Detection failed: %s", e.getMessage());
+                            return null;
+                        }
+                    }
+
+                    @Override
+                    protected void onPreExecute() {
+                        //TODO: show progress dialog
+                        detectionProgressDialog.show();
+                    }
+                    @Override
+                    protected void onProgressUpdate(String... progress) {
+                        //TODO: update progress
+                        detectionProgressDialog.setMessage(progress[0]);
+                    }
+
+                    private static final String LOG_TAG = "LogActivity";
+
                     @Override
                     protected void onPostExecute(Face[] result) {
                         //TODO: update face frames
@@ -132,10 +223,40 @@ public class MainActivity extends Activity {
                         imageView.setImageBitmap(
                                 drawFaceRectanglesOnBitmap(imageBitmap, result));
                         imageBitmap.recycle();
+
+                        for (Face face : result) {
+                            UUID mFaceId = face.faceId;
+                            mFaceId0[0] = mFaceId;
+                            Log.d(LOG_TAG, mFaceId.toString());
+                        }
+
+                        //TextView textView = findViewById(R.id.verifyText);
+                        //textView.setText(result[1].toString());
                     }
                 };
 
         detectTask.execute(inputStream);
+
+        return mFaceId0[0];
+    }
+
+    private void verify(UUID Id0, UUID Id1){
+        String LOG_TAG = "LogActivity";
+        VerifyResult result = new VerifyResult();
+        try {
+            result = faceServiceClient.verify(Id0,Id1);
+            DecimalFormat formatter = new DecimalFormat("#0.00");
+            String verificationResult = (result.isIdentical ? "The same person": "Different persons")
+                    + ". The confidence is " + formatter.format(result.confidence);
+            Log.d(LOG_TAG, verificationResult);
+            TextView textView = findViewById(R.id.verifyText);
+            textView.setText(verificationResult);
+        } catch (Exception e) {
+            Log.d(LOG_TAG, "fail to verify");
+            TextView textView = findViewById(R.id.verifyText);
+            textView.setText("fail to verify");
+
+        }
     }
 
     private void showError(String message) {
